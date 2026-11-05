@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Get user's access token
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("access_token, username, business_account_id")
+      .select("access_token, username, business_account_id, page_id")
       .eq("id", user_id)
       .single()
 
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
     console.log("[v0] Sending DM from", user.username, "to", recipient_id)
 
     // Send message via Instagram API (Try graph.facebook.com with target ID, fallback to graph.instagram.com)
-    const targetId = user.business_account_id || user_id || process.env.INSTAGRAM_APP_ID || "me"
+    const targetId = user.page_id || process.env.INSTAGRAM_APP_ID || (user.business_account_id ? String(user.business_account_id) : "me")
     const sendUrl = `https://graph.facebook.com/v24.0/${targetId}/messages?access_token=${encodeURIComponent(user.access_token)}`
 
     let response = await fetch(sendUrl, {

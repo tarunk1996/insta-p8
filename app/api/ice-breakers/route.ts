@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             // Actually, keeping it simple: We set them on IG. When user clicks, we get a Postback.
             // We need to know which response to send. 
 
-            const targetId = user.business_account_id || user.id || process.env.INSTAGRAM_APP_ID || "me"
+            const targetId = user.page_id || process.env.INSTAGRAM_APP_ID || (user.business_account_id ? String(user.business_account_id) : "me")
             let response = await fetch(
                 `https://graph.facebook.com/v24.0/${targetId}/messenger_profile?access_token=${user.access_token}`,
                 {

@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 2. Fetch Media: Try graph.facebook.com (Unified Login) then fallback to graph.instagram.com
-    const targetId = user.business_account_id || user.page_id || process.env.INSTAGRAM_APP_ID || "me"
+    const targetId = user.page_id || process.env.INSTAGRAM_APP_ID || (user.business_account_id ? String(user.business_account_id) : "me")
     let url = `https://graph.facebook.com/v24.0/${targetId}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp&limit=24&access_token=${user.access_token}`
     let res = await fetch(url, { cache: 'no-store' })
     let data = await res.json()
