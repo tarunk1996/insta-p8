@@ -23,14 +23,20 @@ export function LandingPage() {
   }, [])
 
   const handleLogin = () => {
-    // Instagram Business Login (Instagram API with Instagram Login). client_id must be the
-    // Instagram app ID from the Instagram product page, not the parent Meta app ID.
-    window.location.href = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID}&redirect_uri=${process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI}&response_type=code&scope=instagram_business_basic%2Cinstagram_business_manage_messages%2Cinstagram_business_manage_comments`
+    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID
+    const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI
+    const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID
+
+    if (configId) {
+      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?client_id=${appId}&config_id=${configId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code`
+    } else {
+      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code&scope=instagram_basic,instagram_manage_messages,instagram_manage_comments`
+    }
   }
 
   const handleTestLogin = () => {
-    localStorage.setItem("ig_user_id", "9999999999")
-    localStorage.setItem("ig_username", "test_creator")
+    localStorage.setItem("ig_user_id", "17841402552818155")
+    localStorage.setItem("ig_username", "itarun_kumar")
     router.push("/dashboard")
   }
 

@@ -1,4 +1,5 @@
-const GRAPH = "https://graph.instagram.com/v24.0"
+const GRAPH = process.env.INSTAGRAM_GRAPH_URL || "https://graph.facebook.com/v24.0"
+const LEGACY_GRAPH = "https://graph.instagram.com/v24.0"
 
 export interface IGButton {
   type: "web_url" | "postback"
@@ -25,9 +26,20 @@ export interface SendResult {
   error?: any
 }
 
-async function post(path: string, token: string, body: any): Promise<SendResult> {
+function resolveMessagePath(path: string, accountId?: string): string {
+  if (path.startsWith("me/messages")) {
+    const target = accountId || process.env.INSTAGRAM_ACCOUNT_ID || process.env.INSTAGRAM_APP_ID
+    if (target && target !== "me") {
+      return `${target}/messages`
+    }
+  }
+  return path
+}
+
+async function post(path: string, token: string, body: any, accountId?: string): Promise<SendResult> {
+  const resolvedPath = resolveMessagePath(path, accountId)
   try {
-    const res = await fetch(`${GRAPH}/${path}?access_token=${encodeURIComponent(token)}`, {
+    const res = await fetch(`${GRAPH}/${resolvedPath}?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
       signal: AbortSignal.timeout(15000),
       headers: { "Content-Type": "application/json" },
@@ -35,12 +47,26 @@ async function post(path: string, token: string, body: any): Promise<SendResult>
     })
     const json = await res.json()
     if (!res.ok || json.error) {
-      console.error(`[ig-api] ${path} failed:`, JSON.stringify(json.error))
+      if (GRAPH !== LEGACY_GRAPH && (json.error?.code === 100 || json.error?.code === 190)) {
+        try {
+          const fallbackRes = await fetch(`${LEGACY_GRAPH}/${path}?access_token=${encodeURIComponent(token)}`, {
+            method: "POST",
+            signal: AbortSignal.timeout(15000),
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          })
+          const fallbackJson = await fallbackRes.json()
+          if (fallbackRes.ok && !fallbackJson.error) {
+            return { ok: true, id: fallbackJson.id || fallbackJson.message_id }
+          }
+        } catch {}
+      }
+      console.error(`[ig-api] ${resolvedPath} failed:`, JSON.stringify(json.error))
       return { ok: false, error: json.error || `HTTP ${res.status}` }
     }
     return { ok: true, id: json.id || json.message_id }
   } catch (e) {
-    console.error(`[ig-api] ${path} network error:`, e)
+    console.error(`[ig-api] ${resolvedPath} network error:`, e)
     return { ok: false, error: e }
   }
 }
@@ -92,6 +118,7 @@ export async function sendTextDM(
   recipient: { id?: string; comment_id?: string },
   text: string,
   quickReplies?: QuickReply[],
+  accountId?: string,
 ): Promise<SendResult> {
   const message: any = { text }
   if (quickReplies?.length) {
@@ -101,15 +128,16 @@ export async function sendTextDM(
       payload: q.payload,
     }))
   }
-  return post("me/messages", token, { recipient, message })
+  return post("me/messages", token, { recipient, message }, accountId)
 }
 
 export async function sendCardDM(
   token: string,
   recipient: { id?: string; comment_id?: string },
   card: IGCard,
+  accountId?: string,
 ): Promise<SendResult> {
-  return post("me/messages", token, { recipient, message: buildCardAttachment(card) })
+  return post("me/messages", token, { recipient, message: buildCardAttachment(card) }, accountId)
 }
 
 export async function sendMediaDM(
@@ -117,19 +145,21 @@ export async function sendMediaDM(
   recipient: { id?: string; comment_id?: string },
   mediaType: "image" | "video" | "audio",
   url: string,
+  accountId?: string,
 ): Promise<SendResult> {
   return post("me/messages", token, {
     recipient,
     message: { attachment: { type: mediaType, payload: { url } } },
-  })
+  }, accountId)
 }
 
 export async function sendSenderAction(
   token: string,
   recipientId: string,
   action: "typing_on" | "typing_off" | "mark_seen",
+  accountId?: string,
 ): Promise<SendResult> {
-  return post("me/messages", token, { recipient: { id: recipientId }, sender_action: action })
+  return post("me/messages", token, { recipient: { id: recipientId }, sender_action: action }, accountId)
 }
 
 export async function sendMessageReaction(
@@ -137,12 +167,13 @@ export async function sendMessageReaction(
   recipientId: string,
   messageId: string,
   reaction = "love",
+  accountId?: string,
 ): Promise<SendResult> {
   return post("me/messages", token, {
     recipient: { id: recipientId },
     sender_action: "react",
     payload: { message_id: messageId, reaction },
-  })
+  }, accountId)
 }
 
 export async function replyToComment(token: string, commentId: string, message: string): Promise<SendResult> {
@@ -151,8 +182,12 @@ export async function replyToComment(token: string, commentId: string, message: 
 
 export async function fetchProfile(token: string, igUserId: string): Promise<{ username?: string; name?: string } | null> {
   try {
-    const res = await fetch(`${GRAPH}/${igUserId}?fields=username,name&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(5000) })
-    const json = await res.json()
+    let res = await fetch(`${GRAPH}/${igUserId}?fields=username,name&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(5000) })
+    let json = await res.json()
+    if ((!res.ok || json.error) && GRAPH !== LEGACY_GRAPH) {
+      res = await fetch(`${LEGACY_GRAPH}/${igUserId}?fields=username,name&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(5000) })
+      json = await res.json()
+    }
     if (!res.ok || json.error) return null
     return json
   } catch {
@@ -162,7 +197,10 @@ export async function fetchProfile(token: string, igUserId: string): Promise<{ u
 
 export async function verifyIdOwnership(token: string, id: string): Promise<boolean> {
   try {
-    const res = await fetch(`${GRAPH}/${id}?fields=id&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(5000) })
+    let res = await fetch(`${GRAPH}/${id}?fields=id&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(5000) })
+    if (!res.ok && GRAPH !== LEGACY_GRAPH) {
+      res = await fetch(`${LEGACY_GRAPH}/${id}?fields=id&access_token=${encodeURIComponent(token)}`, { signal: AbortSignal.timeout(5000) })
+    }
     return res.ok
   } catch {
     return false

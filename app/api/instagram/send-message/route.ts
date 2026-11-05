@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     // Get user's access token
     const { data: user, error: userError } = await supabase
       .from("users")
-      .select("access_token, username")
+      .select("access_token, username, business_account_id")
       .eq("id", user_id)
       .single()
 
@@ -36,10 +36,11 @@ export async function POST(request: NextRequest) {
 
     console.log("[v0] Sending DM from", user.username, "to", recipient_id)
 
-    // Send message via Instagram API
-    const sendUrl = `https://graph.instagram.com/v24.0/me/messages?access_token=${encodeURIComponent(user.access_token)}`
+    // Send message via Instagram API (Try graph.facebook.com with target ID, fallback to graph.instagram.com)
+    const targetId = user.business_account_id || user_id || process.env.INSTAGRAM_APP_ID || "me"
+    const sendUrl = `https://graph.facebook.com/v24.0/${targetId}/messages?access_token=${encodeURIComponent(user.access_token)}`
 
-    const response = await fetch(sendUrl, {
+    let response = await fetch(sendUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -54,7 +55,24 @@ export async function POST(request: NextRequest) {
       }),
     })
 
-    const data = await response.json()
+    let data = await response.json()
+
+    if (!response.ok && (data.error?.code === 100 || data.error?.code === 190)) {
+      const fallbackUrl = `https://graph.instagram.com/v24.0/me/messages?access_token=${encodeURIComponent(user.access_token)}`
+      const fallbackRes = await fetch(fallbackUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: { id: recipient_id.toString() },
+          message: { text: message },
+        }),
+      })
+      const fallbackData = await fallbackRes.json()
+      if (fallbackRes.ok && !fallbackData.error) {
+        response = fallbackRes
+        data = fallbackData
+      }
+    }
 
     if (!response.ok) {
       console.error("[v0] Failed to send message:", data)

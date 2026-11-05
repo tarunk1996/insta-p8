@@ -80,21 +80,39 @@ export async function POST(request: NextRequest) {
             // Actually, keeping it simple: We set them on IG. When user clicks, we get a Postback.
             // We need to know which response to send. 
 
-            const response = await fetch(
-                `https://graph.instagram.com/v21.0/me/messenger_profile?access_token=${user.access_token}`,
+            const targetId = user.business_account_id || user.id || process.env.INSTAGRAM_APP_ID || "me"
+            let response = await fetch(
+                `https://graph.facebook.com/v24.0/${targetId}/messenger_profile?access_token=${user.access_token}`,
                 {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         ice_breakers: ice_breakers,
-                        platform: "instagram" // Important
+                        platform: "instagram"
                     })
                 }
             )
-            const igResult = await response.json()
+            let igResult = await response.json()
             if (igResult.error) {
-                console.error("IG Sync Error", igResult.error)
-                return NextResponse.json({ success: true, warning: "Saved to DB but IG Sync failed", error: igResult.error }, { status: 200 })
+                // Try legacy graph.instagram.com
+                const fallbackRes = await fetch(
+                    `https://graph.instagram.com/v21.0/me/messenger_profile?access_token=${user.access_token}`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            ice_breakers: ice_breakers,
+                            platform: "instagram"
+                        })
+                    }
+                )
+                const fallbackData = await fallbackRes.json()
+                if (!fallbackData.error) {
+                    igResult = fallbackData
+                } else {
+                    console.error("IG Sync Error", igResult.error)
+                    return NextResponse.json({ success: true, warning: "Saved to DB but IG Sync failed", error: igResult.error }, { status: 200 })
+                }
             }
         }
 

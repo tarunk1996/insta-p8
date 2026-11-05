@@ -32,9 +32,10 @@ export async function POST(request: NextRequest) {
             apiBody.message = { attachment }
         }
 
-        // 3. Send to Instagram
-        const res = await fetch(
-            `https://graph.instagram.com/v24.0/me/messages?access_token=${user.access_token}`,
+        // 3. Send to Instagram (Try graph.facebook.com with target ID, fallback to graph.instagram.com)
+        const targetId = user.business_account_id || user.id || process.env.INSTAGRAM_APP_ID || "me"
+        let res = await fetch(
+            `https://graph.facebook.com/v24.0/${targetId}/messages?access_token=${user.access_token}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -42,7 +43,23 @@ export async function POST(request: NextRequest) {
             }
         )
 
-        const data = await res.json()
+        let data = await res.json()
+
+        if (data.error && (data.error.code === 100 || data.error.code === 190)) {
+            // Fallback to legacy graph.instagram.com
+            const fallbackRes = await fetch(
+                `https://graph.instagram.com/v24.0/me/messages?access_token=${user.access_token}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(apiBody)
+                }
+            )
+            const fallbackData = await fallbackRes.json()
+            if (!fallbackData.error) {
+                data = fallbackData
+            }
+        }
 
         if (data.error) {
             console.error("[Inbox Send] Instagram API Error:", data.error)
