@@ -25,21 +25,16 @@ export function LandingPage() {
   const handleInstagramLogin = () => {
     const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID
     const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI
-    // Direct Instagram OAuth: enable_fb_login=0 disables Facebook redirect; force_authentication=1 prompts to switch accounts / enter Instagram username & password
-    window.location.href = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code&scope=instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments`
-  }
-
-  const handleFacebookLogin = () => {
-    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID
-    const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID
-
+    // Meta Unified Login OAuth dialog (Meta App IDs must use facebook.com/v24.0/dialog/oauth)
     if (configId) {
-      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?client_id=${appId}&config_id=${configId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code`
+      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?auth_type=reauthenticate&client_id=${appId}&config_id=${configId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code`
     } else {
-      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code&scope=instagram_basic,instagram_manage_messages,instagram_manage_comments`
+      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?auth_type=reauthenticate&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code&scope=instagram_basic,instagram_manage_messages,instagram_manage_comments`
     }
   }
+
+  const handleFacebookLogin = handleInstagramLogin
 
   const handleDirectLogin = () => {
     localStorage.setItem("ig_user_id", "17841402552818155")
