@@ -65,16 +65,13 @@ export async function POST(request: NextRequest) {
           username = igAccount.username || igAccount.name || `user_${loginUserId}`
           profilePic = igAccount.profile_picture_url || null
         } else {
-          // If no assigned accounts array, check user profile
-          const meRes = await fetch(`https://graph.facebook.com/v24.0/me?fields=id,name&access_token=${accessToken}`)
-          const meData = await meRes.json()
-          loginUserId = meData.id ? meData.id.toString() : "unknown"
-          businessAccountId = loginUserId
-          username = meData.name || `user_${loginUserId}`
+          // If no assigned Instagram accounts via Unified Login, reset accessToken to try direct Instagram login exchange
+          console.warn("[v0] No assigned Instagram accounts found via Unified Login, trying direct Instagram token exchange")
+          accessToken = ""
         }
       }
     } catch (e) {
-      console.warn("[v0] Unified login exchange failed, trying legacy Instagram OAuth:", e)
+      console.warn("[v0] Unified login exchange failed, trying direct Instagram OAuth:", e)
     }
 
     // 3. Fallback to Legacy Instagram Login if Unified Login did not produce a token

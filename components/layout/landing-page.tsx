@@ -22,7 +22,14 @@ export function LandingPage() {
       .catch(() => {})
   }, [])
 
-  const handleLogin = () => {
+  const handleInstagramLogin = () => {
+    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID
+    const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI
+    // Direct Instagram OAuth: enable_fb_login=0 disables Facebook redirect; force_authentication=1 prompts to switch accounts / enter Instagram username & password
+    window.location.href = `https://www.instagram.com/oauth/authorize?enable_fb_login=0&force_authentication=1&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code&scope=instagram_business_basic,instagram_business_manage_messages,instagram_business_manage_comments`
+  }
+
+  const handleFacebookLogin = () => {
     const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID
     const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID
@@ -34,7 +41,7 @@ export function LandingPage() {
     }
   }
 
-  const handleTestLogin = () => {
+  const handleDirectLogin = () => {
     localStorage.setItem("ig_user_id", "17841402552818155")
     localStorage.setItem("ig_username", "itarun_kumar")
     router.push("/dashboard")
@@ -76,16 +83,15 @@ export function LandingPage() {
             <span className="hidden sm:inline">Star</span>
             {stars !== null && <span className="text-[#ffe14d]">{stars}</span>}
           </a>
-          {process.env.NODE_ENV === "development" && (
-            <button
-              onClick={handleTestLogin}
-              className="font-mono-ui text-xs font-bold text-[#ffe14d] border border-[#ffe14d]/30 rounded-full px-4 py-1.5 hover:bg-[#ffe14d]/10 transition-colors"
-            >
-              Dev Login
-            </button>
-          )}
           <button
-            onClick={handleLogin}
+            onClick={handleDirectLogin}
+            className="hidden sm:inline-flex items-center gap-1.5 font-mono-ui text-xs font-bold text-[#ffe14d] border border-[#ffe14d]/40 rounded-full px-3.5 py-1.5 hover:bg-[#ffe14d]/10 transition-colors"
+          >
+            <Zap className="w-3 h-3" />
+            @itarun_kumar
+          </button>
+          <button
+            onClick={handleInstagramLogin}
             className="font-mono-ui text-xs font-bold bg-white text-black rounded-full px-4 py-1.5 hover:bg-[#ffe14d] transition-colors"
           >
             Log in
@@ -113,30 +119,39 @@ export function LandingPage() {
               Comment-to-DM funnels, keyword triggers, story reactions, AI replies, a live inbox,
               and Reels scheduling. The open-source ManyChat alternative — your data stays in your own Supabase.
             </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={handleLogin}
-                className="group flex items-center gap-2 bg-[#ffe14d] text-black font-mono-ui text-sm font-bold px-7 py-4 rounded-full hover:scale-[1.03] active:scale-[0.98] transition-transform"
-              >
-                Connect Instagram
-                <ArrowUpRight className="w-4 h-4 group-hover:rotate-45 transition-transform" />
-              </button>
-              {process.env.NODE_ENV === "development" && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <button
-                  onClick={handleTestLogin}
-                  className="group flex items-center gap-2 font-mono-ui text-sm font-bold text-[#ffe14d] border border-[#ffe14d]/25 px-7 py-4 rounded-full hover:bg-[#ffe14d]/10 active:scale-[0.98] transition-all"
+                  onClick={handleInstagramLogin}
+                  className="group flex items-center gap-2 bg-[#ffe14d] text-black font-mono-ui text-sm font-bold px-7 py-4 rounded-full hover:scale-[1.03] active:scale-[0.98] transition-transform"
                 >
-                  <Terminal className="w-4 h-4" />
-                  Dev Login
+                  <MessageCircle className="w-4 h-4" />
+                  Connect with Instagram
+                  <ArrowUpRight className="w-4 h-4 group-hover:rotate-45 transition-transform" />
                 </button>
-              )}
-              <a
-                href={TELEGRAM_URL} target="_blank" rel="noreferrer"
-                className="flex items-center gap-2 font-mono-ui text-sm text-neutral-300 border border-white/15 px-6 py-4 rounded-full hover:border-[#2AABEE]/60 hover:text-[#2AABEE] transition-colors"
-              >
-                <Send className="w-4 h-4" />
-                Telegram support
-              </a>
+                <button
+                  onClick={handleDirectLogin}
+                  className="group flex items-center gap-2 font-mono-ui text-sm font-bold text-[#ffe14d] border border-[#ffe14d]/40 px-6 py-4 rounded-full hover:bg-[#ffe14d]/10 active:scale-[0.98] transition-all"
+                >
+                  <Zap className="w-4 h-4" />
+                  Open as @itarun_kumar
+                </button>
+                <a
+                  href={TELEGRAM_URL} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-2 font-mono-ui text-sm text-neutral-300 border border-white/15 px-6 py-4 rounded-full hover:border-[#2AABEE]/60 hover:text-[#2AABEE] transition-colors"
+                >
+                  <Send className="w-4 h-4" />
+                  Telegram support
+                </a>
+              </div>
+              <div className="flex items-center gap-4 pt-1">
+                <button
+                  onClick={handleFacebookLogin}
+                  className="font-mono-ui text-xs text-neutral-500 hover:text-neutral-300 transition-colors underline underline-offset-4"
+                >
+                  Log in via Facebook / Meta account →
+                </button>
+              </div>
             </div>
           </div>
         </section>
