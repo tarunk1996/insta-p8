@@ -101,6 +101,12 @@ export function LandingPage() {
     }
   }
 
+  const fallbackUsers: ConnectedUser[] = [
+    { id: "17841460709427648", username: "adab_luxe" },
+    { id: "17841402552818155", username: "itarun_kumar" },
+  ]
+  const displayUsers = connectedUsers.length > 0 ? connectedUsers : fallbackUsers
+
   return (
     <div className="min-h-screen bg-[#0a0a0a] text-[#ededed] selection:bg-[#ffe14d] selection:text-black overflow-x-hidden antialiased">
       <style>{`
@@ -139,7 +145,7 @@ export function LandingPage() {
           </a>
 
           {/* Quick Account Buttons */}
-          {connectedUsers.map((user) => (
+          {displayUsers.map((user) => (
             <button
               key={user.id}
               onClick={() => handleLaunchAccount(user)}
@@ -190,7 +196,7 @@ export function LandingPage() {
                   <ArrowUpRight className="w-4 h-4 group-hover:rotate-45 transition-transform" />
                 </button>
 
-                {connectedUsers.map((user) => (
+                {displayUsers.map((user) => (
                   <button
                     key={user.id}
                     onClick={() => handleLaunchAccount(user)}

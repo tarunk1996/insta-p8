@@ -12,9 +12,9 @@ export async function GET() {
     if (error) throw error
 
     // Format IDs as safe strings (avoid BigInt float rounding)
-    // Filter out internal / dummy entries like "9999999999"
+    // Filter out internal / dummy entries or Facebook personal names with spaces
     const safeUsers = (users || [])
-      .filter(u => u.username && !u.username.startsWith("test_"))
+      .filter(u => u.username && !u.username.startsWith("test_") && !u.username.includes(" "))
       .map(u => ({
         id: String(u.id),
         username: u.username,
