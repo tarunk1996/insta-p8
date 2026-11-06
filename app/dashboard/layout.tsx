@@ -11,7 +11,7 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode
 }) {
-    const { username, profilePic, logout, isLoading } = useInstagramSession()
+    const { username, profilePic, availableAccounts, switchAccount, logout, isLoading } = useInstagramSession()
     const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
     useEffect(() => {
@@ -42,6 +42,8 @@ export default function DashboardLayout({
                     className="h-full border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
                     username={username || "User"}
                     profilePic={profilePic}
+                    accounts={availableAccounts}
+                    onSwitchAccount={switchAccount}
                     onLogout={logout}
                     collapsed={sidebarCollapsed}
                     onToggle={toggleSidebar}

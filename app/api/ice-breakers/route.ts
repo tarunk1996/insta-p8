@@ -57,9 +57,9 @@ export async function POST(request: NextRequest) {
         if (insertError) throw insertError
 
         // 2. Sync to Instagram
-        const { data: user } = await supabase.from("users").select("access_token, page_id").eq("id", userId).single()
+        const { data: user } = await supabase.from("users").select("access_token, page_id, business_account_id").eq("id", userId).single()
 
-        if (user && user.access_token && user.page_id) {
+        if (user && user.access_token) {
             // Construct IG Payload
             const ice_breakers = inserted.map((ib: any) => ({
                 question: ib.question,
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             // Actually, keeping it simple: We set them on IG. When user clicks, we get a Postback.
             // We need to know which response to send. 
 
-            const targetId = user.page_id || process.env.INSTAGRAM_APP_ID || (user.business_account_id ? String(user.business_account_id) : "me")
+            const targetId = user.business_account_id ? String(user.business_account_id) : (user.page_id || "me")
             let response = await fetch(
                 `https://graph.facebook.com/v24.0/${targetId}/messenger_profile?access_token=${user.access_token}`,
                 {

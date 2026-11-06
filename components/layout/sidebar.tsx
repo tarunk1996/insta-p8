@@ -1,11 +1,13 @@
 "use client"
 
 import type React from "react"
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ChevronLeft, ChevronRight, LifeBuoy, LogOut, Zap } from "lucide-react"
+import { ChevronLeft, ChevronRight, LifeBuoy, LogOut, Zap, ChevronsUpDown, Check, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ThemeToggle } from "@/components/theme-toggle"
+import type { ConnectedAccount } from "@/hooks/use-instagram-session"
 
 const NAV = [
   { href: "/dashboard", label: "Home", icon: "/icons/home.svg" },
@@ -18,14 +20,28 @@ const NAV = [
 interface SidebarProps extends React.HTMLAttributes<HTMLDivElement> {
   username?: string
   profilePic?: string | null
+  accounts?: ConnectedAccount[]
+  onSwitchAccount?: (account: ConnectedAccount) => void
   onLogout?: () => void
   onNavigate?: () => void
   collapsed?: boolean
   onToggle?: () => void
 }
 
-export function Sidebar({ className, username = "creator", profilePic, onLogout, onNavigate, collapsed = false, onToggle, ...props }: SidebarProps) {
+export function Sidebar({
+  className,
+  username = "creator",
+  profilePic,
+  accounts = [],
+  onSwitchAccount,
+  onLogout,
+  onNavigate,
+  collapsed = false,
+  onToggle,
+  ...props
+}: SidebarProps) {
   const pathname = usePathname()
+  const [showAccountMenu, setShowAccountMenu] = useState(false)
 
   const itemClass = (active: boolean) => cn(
     "relative flex h-10 items-center rounded-lg text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
@@ -66,13 +82,66 @@ export function Sidebar({ className, username = "creator", profilePic, onLogout,
         </a>
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
+      <div className="relative border-t border-sidebar-border p-3">
         {!collapsed && <div className="mb-3 flex items-center justify-between px-1"><span className="text-xs text-muted-foreground">Appearance</span><ThemeToggle className="h-7 w-14" /></div>}
+
+        {/* Account Switcher Popup */}
+        {showAccountMenu && accounts.length > 0 && !collapsed && (
+          <div className="absolute bottom-16 left-3 right-3 z-50 rounded-xl border border-sidebar-border bg-card p-2 shadow-xl">
+            <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Switch Account</p>
+            <div className="mt-1 space-y-1">
+              {accounts.map(acc => {
+                const isActive = acc.username.toLowerCase() === username.toLowerCase()
+                return (
+                  <button
+                    key={acc.id}
+                    onClick={() => {
+                      setShowAccountMenu(false)
+                      onSwitchAccount?.(acc)
+                    }}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-colors",
+                      isActive ? "bg-sidebar-accent font-medium text-sidebar-foreground" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                    )}
+                  >
+                    <span className="truncate">@{acc.username}</span>
+                    {isActive && <Check className="size-3.5 text-foreground" />}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="my-1.5 h-px bg-border" />
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground"
+            >
+              <Plus className="size-3" /> Connect another account
+            </Link>
+          </div>
+        )}
+
         <div className={cn("flex items-center rounded-lg bg-sidebar-accent p-2", collapsed ? "justify-center" : "gap-2.5")}>
           <div className="flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
             {profilePic ? <img src={profilePic} alt={username} className="size-full object-cover" /> : username.charAt(0).toUpperCase()}
           </div>
-          {!collapsed && <><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">@{username}</p><p className="mt-0.5 text-[11px] text-muted-foreground">Instagram connected</p></div><button onClick={onLogout} aria-label="Log out" title="Log out" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar hover:text-destructive"><LogOut className="size-4" /></button></>}
+          {!collapsed && (
+            <>
+              <button
+                onClick={() => setShowAccountMenu(prev => !prev)}
+                className="min-w-0 flex-1 text-left group"
+                title="Switch Instagram account"
+              >
+                <div className="flex items-center gap-1">
+                  <p className="truncate text-xs font-medium">@{username}</p>
+                  <ChevronsUpDown className="size-3 text-muted-foreground group-hover:text-foreground transition-colors" />
+                </div>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">Switch / Manage</p>
+              </button>
+              <button onClick={onLogout} aria-label="Log out" title="Log out" className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-sidebar hover:text-destructive">
+                <LogOut className="size-4" />
+              </button>
+            </>
+          )}
         </div>
       </div>
     </aside>

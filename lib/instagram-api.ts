@@ -28,7 +28,7 @@ export interface SendResult {
 
 function resolveMessagePath(path: string, accountId?: string): string {
   if (path.startsWith("me/messages")) {
-    const target = accountId || process.env.INSTAGRAM_ACCOUNT_ID || process.env.INSTAGRAM_APP_ID
+    const target = accountId || process.env.INSTAGRAM_ACCOUNT_ID
     if (target && target !== "me") {
       return `${target}/messages`
     }

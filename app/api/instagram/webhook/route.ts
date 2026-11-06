@@ -96,12 +96,13 @@ async function sendAutomationResponse(
   token: string,
   recipient: { id?: string; comment_id?: string },
   content: any,
-  opts: { skipTyping?: boolean } = {},
+  opts: { skipTyping?: boolean; accountId?: string } = {},
 ) {
+  const accountId = opts.accountId || process.env.INSTAGRAM_ACCOUNT_ID
   const delaySeconds = Number(content.delay_seconds) || 0
   const useTyping = content.typing_indicator === true && recipient.id && !opts.skipTyping
 
-  if (useTyping) await sendSenderAction(token, recipient.id!, "typing_on")
+  if (useTyping) await sendSenderAction(token, recipient.id!, "typing_on", accountId)
   if (delaySeconds > 0) await sleep(delaySeconds * 1000)
 
   const quickReplies = Array.isArray(content.quick_replies)
@@ -112,19 +113,19 @@ async function sendAutomationResponse(
 
   let result
   if (content.media?.url) {
-    result = await sendMediaDM(token, recipient, content.media.type || "image", content.media.url)
+    result = await sendMediaDM(token, recipient, content.media.type || "image", content.media.url, accountId)
     if (result.ok && content.message) {
-      result = await sendTextDM(token, recipient, content.message, quickReplies)
+      result = await sendTextDM(token, recipient, content.message, quickReplies, accountId)
     }
   } else if (content.card) {
-    result = await sendCardDM(token, recipient, content.card)
+    result = await sendCardDM(token, recipient, content.card, accountId)
   } else if (content.message) {
-    result = await sendTextDM(token, recipient, content.message, quickReplies)
+    result = await sendTextDM(token, recipient, content.message, quickReplies, accountId)
   } else {
     result = { ok: false, error: "empty content" }
   }
 
-  if (useTyping) await sendSenderAction(token, recipient.id!, "typing_off")
+  if (useTyping) await sendSenderAction(token, recipient.id!, "typing_off", accountId)
   return result
 }
 
@@ -270,10 +271,18 @@ export async function POST(request: NextRequest) {
         continue
       }
 
+      // CRITICAL: Ensure precision handling and account ID resolution
+      const userIdStr = String(user.id)
+      const targetAccountId = user.business_account_id ? String(user.business_account_id) : (user.page_id ? String(user.page_id) : userIdStr)
+
+      // Query automations by user.id or business_account_id or page_id
+      const idCandidates = Array.from(new Set([userIdStr, targetAccountId, user.page_id ? String(user.page_id) : null].filter(Boolean)))
+      const queryFilter = idCandidates.map(id => `user_id.eq.${id}`).join(",")
+
       const { data: automations } = await supabase
         .from("automations")
         .select("*")
-        .eq("user_id", user.id)
+        .or(queryFilter)
         .eq("is_active", true)
 
       if (!automations?.length) continue
@@ -353,7 +362,7 @@ export async function POST(request: NextRequest) {
                             user.access_token,
                             { comment_id: commentId },
                             content,
-                            { skipTyping: true },
+                            { skipTyping: true, accountId: targetAccountId },
                           )
                         }
                       } else if (followResult.follows === false) {
@@ -366,6 +375,7 @@ export async function POST(request: NextRequest) {
                             user.access_token,
                             { comment_id: commentId },
                             buildFollowGateCard({ username: user.username, ruleId: match.id }),
+                            targetAccountId,
                           )
                         }
                       } else {
@@ -382,6 +392,7 @@ export async function POST(request: NextRequest) {
                               user.access_token,
                               { comment_id: commentId },
                               buildFollowGateCard({ username: user.username, ruleId: match.id }),
+                              targetAccountId,
                             )
                           }
                         } else {
@@ -395,7 +406,7 @@ export async function POST(request: NextRequest) {
                               user.access_token,
                               { comment_id: commentId },
                               content,
-                              { skipTyping: true },
+                              { skipTyping: true, accountId: targetAccountId },
                             )
                           }
                         }
@@ -410,7 +421,7 @@ export async function POST(request: NextRequest) {
                           user.access_token,
                           { comment_id: commentId },
                           content,
-                          { skipTyping: true },
+                          { skipTyping: true, accountId: targetAccountId },
                         )
                       }
                     }
@@ -477,26 +488,26 @@ export async function POST(request: NextRequest) {
 
                                             if (followResult.follows === true) {
                                               console.log(`[webhook] ✅ Story follower gate: @${senderId} follows @${user.username} — sending content`)
-                                              await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                                              await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                                             } else if (followResult.follows === false) {
                                               console.log(`[webhook] 🔒 Story follower gate: @${senderId} doesn't follow @${user.username}`)
-                                              await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id }))
+                                              await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id }), targetAccountId)
                                             } else {
                                               // null → unverifiable. Distinguish auth vs transient.
                                               const isAuthError = followResult.error === 'auth'
                                               if (isAuthError) {
                                                 // Auth failure — fail CLOSED: send gate
                                                 console.warn(`[webhook] ⚠️ Story follower gate auth failure for @${senderId}; sending gate`)
-                                                await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id }))
+                                                await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id }), targetAccountId)
                                               } else {
                                                 // Transient failure — fail OPEN: deliver content
                                                 console.warn(`[webhook] ⚠️ Story follower gate transient failure for @${senderId}; failing open`)
-                                                await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                                                await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                                               }
                                             }
                                           } else {
                                             // No follower check required — send normally
-                                            await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                                            await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                                           }
                                         }
         }
@@ -685,7 +696,7 @@ export async function POST(request: NextRequest) {
                         if (followResult.follows === true) {
                           await clearUnlockAttempts(attemptKey)
                           console.log(`[webhook] ✅ DM unlock verified for @${senderId}`)
-                          const result = await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                          const result = await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                           const conv = await incomingSaved
                           if (result?.ok && conv) {
                             try {
@@ -705,7 +716,7 @@ export async function POST(request: NextRequest) {
                         } else if (followResult.follows === false) {
                           await clearUnlockAttempts(attemptKey)
                           console.log(`[webhook] ❌ DM unlock rejected: @${senderId} still doesn't follow`)
-                          const result = await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id, title: "❌ Not Following Yet!", subtitle: `We couldn't verify your follow. Please follow @${user.username} and click the button again.` }))
+                          const result = await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id, title: "❌ Not Following Yet!", subtitle: `We couldn't verify your follow. Please follow @${user.username} and click the button again.` }), targetAccountId)
                           const conv = await incomingSaved
                           if (result?.ok && conv) {
                             try {
@@ -777,7 +788,7 @@ export async function POST(request: NextRequest) {
                                                 if (followResult.follows === true) {
                           await clearUnlockAttempts(attemptKey)
                           console.log(`[webhook] ✅ DM follower gate: @${senderId} follows @${user.username} — sending content`)
-                          const result = await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                          const result = await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                           const conv = await incomingSaved
                           if (result?.ok && conv) {
                             try {
@@ -797,7 +808,7 @@ export async function POST(request: NextRequest) {
                         } else if (followResult.follows === false) {
                           await clearUnlockAttempts(attemptKey)
                           console.log(`[webhook] 🔒 DM follower gate: @${senderId} doesn't follow @${user.username}`)
-                          const result = await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id, subtitle: `Please follow @${user.username} to see this!` }))
+                          const result = await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id, subtitle: `Please follow @${user.username} to see this!` }), targetAccountId)
                           const conv = await incomingSaved
                           if (result?.ok && conv) {
                             try {
@@ -821,7 +832,7 @@ export async function POST(request: NextRequest) {
                           const isAuthError = followResult.error === 'auth'
                           if (isAuthError) {
                             console.warn(`[webhook] ⚠️ DM follower gate auth failure for @${senderId}; sending gate`)
-                            const result = await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id, title: "❌ Verification Failed", subtitle: `We can't verify your follow status. Please follow @${user.username} and try again.` }))
+                            const result = await sendCardDM(user.access_token, { id: senderId }, buildFollowGateCard({ username: user.username, ruleId: match.id, title: "❌ Verification Failed", subtitle: `We can't verify your follow status. Please follow @${user.username} and try again.` }), targetAccountId)
                             const conv = await incomingSaved
                             if (result?.ok && conv) {
                               try {
@@ -833,7 +844,7 @@ export async function POST(request: NextRequest) {
                                   sender_username: user.username,
                                   content: "[Auth Failure — Gate Sent]",
                                   is_from_instagram: false,
-                                })
+                                  })
                               } catch (e) {
                                 console.error("[webhook] Failed to save outgoing message", e)
                               }
@@ -841,7 +852,7 @@ export async function POST(request: NextRequest) {
                           } else {
                             // Transient failure — fail OPEN on initial trigger
                             console.warn(`[webhook] ⚠️ DM follower gate transient failure for @${senderId}; failing open on initial trigger`)
-                            const result = await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                            const result = await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                             const conv = await incomingSaved
                             if (result?.ok && conv) {
                               try {
@@ -863,7 +874,7 @@ export async function POST(request: NextRequest) {
                       }
                     } else {
                       // No follower check required
-                      const result = await sendAutomationResponse(user.access_token, { id: senderId }, content)
+                      const result = await sendAutomationResponse(user.access_token, { id: senderId }, content, { accountId: targetAccountId })
                       const conv = await incomingSaved
                       if (result?.ok && conv) {
                         try {

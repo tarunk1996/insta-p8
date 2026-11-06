@@ -5,14 +5,27 @@ import { useRouter } from "next/navigation"
 import {
   Zap, MessageCircle, Sparkles, ArrowUpRight, Github, Star,
   Send, AtSign, Brain, Inbox, Lock, Terminal,
-  Loader2,
+  Loader2, Plus, Key, X, CheckCircle2,
 } from "lucide-react"
 
 const TELEGRAM_URL = "https://t.me/instagramautomationp8"
 const GITHUB_URL = "https://github.com/ayuuxh2/insta-p8"
 
+interface ConnectedUser {
+  id: string
+  username: string
+  page_id?: string
+  business_account_id?: string
+}
+
 export function LandingPage() {
   const [stars, setStars] = useState<number | null>(null)
+  const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([])
+  const [showConnectModal, setShowConnectModal] = useState(false)
+  const [tokenInput, setTokenInput] = useState("")
+  const [usernameInput, setUsernameInput] = useState("")
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [connectError, setConnectError] = useState("")
   const router = useRouter()
 
   useEffect(() => {
@@ -20,26 +33,72 @@ export function LandingPage() {
       .then(r => r.json())
       .then(d => { if (typeof d.stargazers_count === "number") setStars(d.stargazers_count) })
       .catch(() => {})
+
+    fetch("/api/users/list")
+      .then(r => r.json())
+      .then(d => {
+        if (d?.users && Array.isArray(d.users)) {
+          setConnectedUsers(d.users)
+        }
+      })
+      .catch(() => {})
   }, [])
 
   const handleInstagramLogin = () => {
-    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID
-    const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI
+    const appId = process.env.NEXT_PUBLIC_INSTAGRAM_APP_ID || "1491371826202741"
+    const redirectUri = process.env.NEXT_PUBLIC_INSTAGRAM_REDIRECT_URI || `${window.location.origin}/api/instagram/callback`
     const configId = process.env.NEXT_PUBLIC_META_CONFIG_ID
-    // Meta Unified Login OAuth dialog (Meta App IDs must use facebook.com/v24.0/dialog/oauth)
+
     if (configId) {
-      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?auth_type=reauthenticate&client_id=${appId}&config_id=${configId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code`
+      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?auth_type=reauthenticate&client_id=${appId}&config_id=${configId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code`
     } else {
-      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?auth_type=reauthenticate&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri || "")}&response_type=code&scope=instagram_basic,instagram_manage_messages,instagram_manage_comments`
+      const scopes = [
+        "instagram_basic",
+        "instagram_manage_messages",
+        "instagram_manage_comments",
+        "pages_show_list",
+        "pages_read_engagement",
+        "business_management",
+      ].join(",")
+      window.location.href = `https://www.facebook.com/v24.0/dialog/oauth?auth_type=reauthenticate&client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=${encodeURIComponent(scopes)}`
     }
   }
 
   const handleFacebookLogin = handleInstagramLogin
 
-  const handleDirectLogin = () => {
-    localStorage.setItem("ig_user_id", "17841402552818155")
-    localStorage.setItem("ig_username", "itarun_kumar")
+  const handleLaunchAccount = (user: ConnectedUser) => {
+    localStorage.setItem("ig_user_id", user.id)
+    localStorage.setItem("ig_username", user.username)
+    document.cookie = `insta_session=${JSON.stringify({ username: user.username, userId: user.id })}; path=/; max-age=5184000; SameSite=Lax;`
     router.push("/dashboard")
+  }
+
+  const handleManualConnect = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setConnectError("")
+    setIsSubmitting(true)
+    try {
+      const res = await fetch("/api/users/connect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          token: tokenInput.trim(),
+          username: usernameInput.trim(),
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || "Failed to connect account")
+      }
+      localStorage.setItem("ig_user_id", data.user.id)
+      localStorage.setItem("ig_username", data.user.username)
+      setShowConnectModal(false)
+      router.push("/dashboard")
+    } catch (err: any) {
+      setConnectError(err.message || "Connection failed")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   return (
@@ -78,18 +137,24 @@ export function LandingPage() {
             <span className="hidden sm:inline">Star</span>
             {stars !== null && <span className="text-[#ffe14d]">{stars}</span>}
           </a>
-          <button
-            onClick={handleDirectLogin}
-            className="hidden sm:inline-flex items-center gap-1.5 font-mono-ui text-xs font-bold text-[#ffe14d] border border-[#ffe14d]/40 rounded-full px-3.5 py-1.5 hover:bg-[#ffe14d]/10 transition-colors"
-          >
-            <Zap className="w-3 h-3" />
-            @itarun_kumar
-          </button>
+
+          {/* Quick Account Buttons */}
+          {connectedUsers.map((user) => (
+            <button
+              key={user.id}
+              onClick={() => handleLaunchAccount(user)}
+              className="hidden sm:inline-flex items-center gap-1.5 font-mono-ui text-xs font-bold text-[#ffe14d] border border-[#ffe14d]/40 rounded-full px-3.5 py-1.5 hover:bg-[#ffe14d]/10 transition-colors"
+            >
+              <Zap className="w-3 h-3" />
+              @{user.username}
+            </button>
+          ))}
+
           <button
             onClick={handleInstagramLogin}
             className="font-mono-ui text-xs font-bold bg-white text-black rounded-full px-4 py-1.5 hover:bg-[#ffe14d] transition-colors"
           >
-            Log in
+            Connect Account
           </button>
         </div>
       </nav>
@@ -124,13 +189,26 @@ export function LandingPage() {
                   Connect with Instagram
                   <ArrowUpRight className="w-4 h-4 group-hover:rotate-45 transition-transform" />
                 </button>
+
+                {connectedUsers.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleLaunchAccount(user)}
+                    className="group flex items-center gap-2 font-mono-ui text-sm font-bold text-[#ffe14d] border border-[#ffe14d]/40 px-6 py-4 rounded-full hover:bg-[#ffe14d]/10 active:scale-[0.98] transition-all"
+                  >
+                    <Zap className="w-4 h-4" />
+                    Open as @{user.username}
+                  </button>
+                ))}
+
                 <button
-                  onClick={handleDirectLogin}
-                  className="group flex items-center gap-2 font-mono-ui text-sm font-bold text-[#ffe14d] border border-[#ffe14d]/40 px-6 py-4 rounded-full hover:bg-[#ffe14d]/10 active:scale-[0.98] transition-all"
+                  onClick={() => setShowConnectModal(true)}
+                  className="flex items-center gap-2 font-mono-ui text-sm text-neutral-300 border border-white/15 px-5 py-4 rounded-full hover:border-[#ffe14d]/60 hover:text-[#ffe14d] transition-colors"
                 >
-                  <Zap className="w-4 h-4" />
-                  Open as @itarun_kumar
+                  <Key className="w-4 h-4" />
+                  Direct Token Connect
                 </button>
+
                 <a
                   href={TELEGRAM_URL} target="_blank" rel="noreferrer"
                   className="flex items-center gap-2 font-mono-ui text-sm text-neutral-300 border border-white/15 px-6 py-4 rounded-full hover:border-[#2AABEE]/60 hover:text-[#2AABEE] transition-colors"
@@ -144,12 +222,79 @@ export function LandingPage() {
                   onClick={handleFacebookLogin}
                   className="font-mono-ui text-xs text-neutral-500 hover:text-neutral-300 transition-colors underline underline-offset-4"
                 >
-                  Log in via Facebook / Meta account →
+                  Log in via Facebook / Meta account (grant @adab_luxe or Pages) →
                 </button>
               </div>
             </div>
           </div>
         </section>
+
+        {/* Modal: Direct Token Connect */}
+        {showConnectModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div className="relative w-full max-w-lg rounded-2xl border border-white/15 bg-[#121212] p-6 sm:p-8 text-white shadow-2xl">
+              <button
+                onClick={() => setShowConnectModal(false)}
+                className="absolute top-5 right-5 text-neutral-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <h2 className="font-serif-display text-2xl font-bold text-white mb-2">Connect Instagram Account</h2>
+              <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
+                Connect your account directly using your Meta access token. If you have an Instagram account like <span className="text-[#ffe14d]">@adab_luxe</span>, enter the details below to link it instantly.
+              </p>
+
+              <form onSubmit={handleManualConnect} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-mono-ui text-neutral-400 mb-1.5">Instagram Username</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. adab_luxe"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-[#ffe14d]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono-ui text-neutral-400 mb-1.5">Meta Access Token</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Paste Graph API Explorer / System User Access Token here..."
+                    value={tokenInput}
+                    onChange={(e) => setTokenInput(e.target.value)}
+                    className="w-full rounded-lg border border-white/10 bg-black/40 px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-[#ffe14d]"
+                  />
+                </div>
+
+                {connectError && (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+                    {connectError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConnectModal(false)}
+                    className="font-mono-ui text-xs px-4 py-2 text-neutral-400 hover:text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="flex items-center gap-2 rounded-lg bg-[#ffe14d] px-5 py-2.5 font-mono-ui text-xs font-bold text-black hover:bg-[#ffe14d]/90 disabled:opacity-50"
+                  >
+                    {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Connect & Open
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {/* Marquee */}
         <div className="border-y border-white/[0.08] py-3 overflow-hidden">
